@@ -33,7 +33,7 @@ class Payment(Base):
             Currency,
             name="currency_enum",
             create_type=False,
-            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+            values_callable=lambda enm: [item.value for item in enm],
         ),
         nullable=False,
     )
@@ -44,12 +44,12 @@ class Payment(Base):
             PaymentStatus,
             name="payment_status_enum",
             create_type=False,
-            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+            values_callable=lambda enm: [item.value for item in enm],
         ),
         default=PaymentStatus.PENDING,
         nullable=False,
     )
     idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     webhook_url: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), nullable=False)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
