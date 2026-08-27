@@ -3,5 +3,17 @@ name = "payflow-engine"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.19.1",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.141.1",
+    "faststream[rabbit]>=0.7.5",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.15.0",
     "sqlalchemy>=2.0.52",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.4",
 ]
