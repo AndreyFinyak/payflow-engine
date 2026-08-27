@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     postgres_password: str
     postgres_host: str
     postgres_port: int
+    echo: bool = False
+    echo_pool: bool = False
+    pool_size: int = 50
+    max_overflow: int = 10
 
     rabbitmq_host: str
     rabbitmq_port: int
