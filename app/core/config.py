@@ -50,6 +50,9 @@ class Settings(BaseSettings):
 
     outbox_poll_interval_seconds: float = 1.0
 
+    webhook_total_timeout_seconds: float = 10
+    webhook_connect_timeout_seconds: float = 3
+
     @property
     def database_url(self) -> str:
         return (

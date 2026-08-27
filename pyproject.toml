@@ -3,6 +3,7 @@ name = "payflow-engine"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "aiohttp>=3.14.3",
     "alembic>=1.19.1",
     "asyncpg>=0.31.0",
     "fastapi>=0.141.1",
