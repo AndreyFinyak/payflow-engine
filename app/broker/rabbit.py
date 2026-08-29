@@ -35,7 +35,4 @@ error_queue = RabbitQueue(
 
 def create_rabbit_broker(url: str) -> RabbitBroker:
     broker = RabbitBroker(url)
-    broker.declare_exchange(domain_exchange)
-    broker.declare_queue(created_queue)
-    broker.declare_queue(error_queue)
     return broker

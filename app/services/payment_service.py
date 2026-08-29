@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import dataclasses
+from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +8,7 @@ from app.db.models import OutboxEvent, Payment, PaymentStatus
 from app.schemas.payment import CreatePaymentRequest
 
 
-@dataclasses.dataclass(slots=True)
+@dataclass(slots=True)
 class CreatePaymentResult:
     payment: Payment
     created: bool

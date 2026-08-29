@@ -1,5 +1,6 @@
 import logging
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
@@ -8,6 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 LOG_DEFAULT_FORMAT = (
     "[%(asctime)s.%(msecs)03d] %(module)10s:%(lineno)-3d %(levelname)-7s - %(message)s"
 )
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class LoggingConfig(BaseModel):
@@ -28,7 +31,7 @@ class LoggingConfig(BaseModel):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", case_sensitive=False, env_file_encoding="utf-8", extra="ignore"
+        env_file=_PROJECT_ROOT / ".env", case_sensitive=False, env_file_encoding="utf-8", extra="ignore"
     )
 
     api_key: str
