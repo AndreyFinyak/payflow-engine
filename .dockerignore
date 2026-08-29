@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.venv
+.idea
+.ruff_cache
+__pycache__/
+*.py[codz]
+docker/
+docker-compose.yaml
+README.md

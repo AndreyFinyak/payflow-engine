@@ -7,13 +7,13 @@ ENV PYTHONUNBUFFERED=1
 
 RUN pip install uv --quiet
 
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-RUN uv sync --no-dev
+RUN uv sync --locked --no-dev
 
 
 EXPOSE 8000

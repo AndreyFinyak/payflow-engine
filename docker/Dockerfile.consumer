@@ -7,10 +7,11 @@ ENV PYTHONUNBUFFERED=1
 
 RUN pip install uv --quiet
 
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 
 COPY app/ ./app/
-RUN uv sync --no-dev
+
+RUN uv sync --locked --no-dev
 
 
 CMD ["sh", "-c", "uv run python -m app.broker.consumer"]
