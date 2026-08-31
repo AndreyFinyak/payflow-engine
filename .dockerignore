@@ -9,3 +9,4 @@ __pycache__/
 docker/
 docker-compose.yaml
 README.md
+docs/

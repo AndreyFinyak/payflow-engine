@@ -37,11 +37,11 @@ services:
       timeout: 5s
       retries: 10
 
-  app:
+  api:
     build:
       context: .
       dockerfile: docker/Dockerfile.app
-    container_name: payflow_app
+    container_name: payflow_api
     restart: unless-stopped
     env_file:
       - .env
