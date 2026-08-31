@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 from app.db.models import Currency, PaymentStatus
 
@@ -14,6 +14,13 @@ class CreatePaymentRequest(BaseModel):
     description: str = Field(min_length=1, max_length=500)
     metadata: dict[str, Any] = Field(default_factory=dict)
     webhook_url: HttpUrl
+
+    @field_validator("webhook_url")
+    @classmethod
+    def ensure_webhook_url_https(cls, webhook_url: HttpUrl) -> HttpUrl:
+        if webhook_url.scheme != "https":
+            raise ValueError("webhook_url must use the https scheme")
+        return webhook_url
 
 
 class PaymentCreateResponse(BaseModel):

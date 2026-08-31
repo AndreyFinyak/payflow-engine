@@ -3,7 +3,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 
 from app.api.v1.dependencies import RequireApiKey, get_payment_service
-from app.schemas.payment import CreatePaymentRequest, PaymentCreateResponse, PaymentResponse
+from app.schemas.payment import (
+    CreatePaymentRequest,
+    PaymentCreateResponse,
+    PaymentResponse,
+)
 from app.services.payment_service import PaymentService
 
 router = APIRouter(prefix="/payments", tags=["payments"], dependencies=[RequireApiKey])

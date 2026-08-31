@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 import aiohttp
@@ -11,10 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broker.rabbit import (
     RabbitSettings,
-    domain_exchange,
-    created_queue,
-    error_queue,
     create_rabbit_broker,
+    created_queue,
+    domain_exchange,
+    error_queue,
 )
 from app.core.config import settings
 from app.db.db_helper import db_helper
@@ -28,31 +28,58 @@ configure_logging()
 broker = create_rabbit_broker(settings.rabbitmq_url)
 application = FastStream(broker)
 
+RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+WEBHOOK_BACKOFF_DELAYS_SECONDS = (1.0, 2.0, 4.0)
 
-async def _send_webhook_with_retries(payment_id: UUID, status: PaymentStatus, webhook_url: str) -> bool:
-    payload = {"payment_id": str(payment_id), "status": status.value}
-    backoff = [1, 2, 4]
+_webhook_session: aiohttp.ClientSession | None = None
 
+
+@application.after_startup
+async def create_webhook_session() -> None:
+    global _webhook_session
     timeout = aiohttp.ClientTimeout(
-        total=settings.webhook_total_timeout_seconds, connect=settings.webhook_connect_timeout_seconds
+        total=settings.webhook_total_timeout_seconds,
+        connect=settings.webhook_connect_timeout_seconds,
     )
+    _webhook_session = aiohttp.ClientSession(timeout=timeout)
+    logger.info("Shared webhook HTTP session created")
 
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        for attempt, delay in enumerate(backoff, start=1):
-            try:
-                async with session.post(webhook_url, json=payload) as response:
-                    if response.status >= 400:
-                        raise aiohttp.ClientResponseError(
-                            request_info=response.request_info,
-                            history=response.history,
-                            status=response.status,
-                            message=f"Webhook failed with status {response.status}"
-                        )
+
+@application.on_shutdown
+async def close_webhook_session() -> None:
+    if _webhook_session is not None:
+        await _webhook_session.close()
+        logger.info("Shared webhook HTTP session closed")
+
+
+async def _send_webhook_with_retries(payment_id: UUID, payment_status: PaymentStatus, webhook_url: str) -> bool:
+    if _webhook_session is None:
+        raise RuntimeError("Webhook HTTP session is not initialised")
+
+    payload = {"payment_id": str(payment_id), "status": payment_status.value}
+
+    for attempt_index, backoff_delay_seconds in enumerate(WEBHOOK_BACKOFF_DELAYS_SECONDS, start=1):
+        try:
+            async with _webhook_session.post(webhook_url, json=payload) as response:
+                if response.status < 400:
                     return True
-            except Exception:
-                logger.exception("Webhook attempt %s failed for payment %s", attempt, payment_id)
-                if attempt < len(backoff):
-                    await asyncio.sleep(delay)
+                if response.status not in RETRYABLE_STATUS_CODES:
+                    logger.warning(
+                        "Webhook for payment %s rejected with status %s, giving up",
+                        payment_id,
+                        response.status,
+                    )
+                    return False
+                logger.warning(
+                    "Webhook for payment %s failed with retryable status %s",
+                    payment_id,
+                    response.status,
+                )
+        except (aiohttp.ClientError, TimeoutError):
+            logger.exception("Webhook attempt %s failed for payment %s", attempt_index, payment_id)
+
+        if attempt_index < len(WEBHOOK_BACKOFF_DELAYS_SECONDS):
+            await asyncio.sleep(backoff_delay_seconds)
 
     return False
 
@@ -77,7 +104,7 @@ async def _process_payment(session: AsyncSession, payment: Payment) -> PaymentSt
     else:
         payment.status = PaymentStatus.FAILED
 
-    payment.processed_at = datetime.now(timezone.utc)
+    payment.processed_at = datetime.now(UTC)
     await session.commit()
     return payment.status
 
@@ -91,7 +118,14 @@ async def handle_payment_event(message: dict, raw_message: RabbitMessage) -> Non
         await raw_message.ack()
         return
 
-    payment_id = UUID(payment_id_raw)
+    try:
+        payment_id = UUID(str(payment_id_raw))
+    except ValueError:
+        logger.error("Message contains invalid payment_id %r: %s", payment_id_raw, message)
+        await _move_to_dlq(message)
+        await raw_message.ack()
+        return
+
     async with db_helper.session_factory() as session:
         payment = await session.get(Payment, payment_id)
         if payment is None:
@@ -100,18 +134,27 @@ async def handle_payment_event(message: dict, raw_message: RabbitMessage) -> Non
             await raw_message.ack()
             return
 
+        if payment.status != PaymentStatus.PENDING:
+            logger.info(
+                "Payment %s already processed with status %s, skipping redelivered message",
+                payment_id,
+                payment.status.value,
+            )
+            await raw_message.ack()
+            return
+
         try:
             final_status = await _process_payment(session, payment)
         except Exception:
             logger.exception("Processing failed for payment %s", payment_id)
             payment.status = PaymentStatus.FAILED
-            payment.processed_at = datetime.now(timezone.utc)
+            payment.processed_at = datetime.now(UTC)
             await session.commit()
             final_status = payment.status
 
         webhook_sent = await _send_webhook_with_retries(
             payment_id=payment.id,
-            status=final_status,
+            payment_status=final_status,
             webhook_url=payment.webhook_url,
         )
         if not webhook_sent:

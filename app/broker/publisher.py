@@ -1,9 +1,10 @@
 import asyncio
 import logging
 
+from faststream.rabbit import RabbitBroker
 from sqlalchemy import select
 
-from app.broker.rabbit import RabbitSettings, domain_exchange, created_queue
+from app.broker.rabbit import RabbitSettings, created_queue, domain_exchange
 from app.db.db_helper import db_helper
 from app.db.models import OutboxEvent, OutboxStatus
 
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class OutboxPublisher:
-    def __init__(self, broker, poll_interval_seconds: float = 1.0, batch_size: int = 1000) -> None:
+    def __init__(self, broker: RabbitBroker, poll_interval_seconds: float = 1.0, batch_size: int = 1000) -> None:
         self.broker = broker
         self.poll_interval_seconds = poll_interval_seconds
         self.batch_size = batch_size
@@ -27,7 +28,7 @@ class OutboxPublisher:
 
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.poll_interval_seconds)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def stop(self) -> None:
@@ -41,12 +42,14 @@ class OutboxPublisher:
                 .where(OutboxEvent.status == OutboxStatus.PENDING)
                 .order_by(OutboxEvent.id)
                 .limit(self.batch_size)
+                .with_for_update(skip_locked=True)
             )
             events = result.scalars().all()
 
             if not events:
                 return
 
+            published_events_count = 0
             for event in events:
                 await self.broker.publish(
                     event.event_payload,
@@ -55,7 +58,7 @@ class OutboxPublisher:
                     routing_key=RabbitSettings.routing_key,
                 )
                 event.status = OutboxStatus.PROCESSED
+                await session.commit()
+                published_events_count += 1
 
-            await session.commit()
-
-            logger.info("Published %s outbox events", len(events))
+            logger.info("Published %s outbox events", published_events_count)
