@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from app.api.v1.dependencies import RequireApiKey, get_payment_service
 from app.schemas.payment import (
@@ -16,14 +16,10 @@ router = APIRouter(prefix="/payments", tags=["payments"], dependencies=[RequireA
 @router.post("", response_model=PaymentCreateResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_payment(
         payload: CreatePaymentRequest,
-        response: Response,
         payment_service: PaymentService = Depends(get_payment_service),
         idempotency_key: str = Header(..., alias="Idempotency-Key"),
 ) -> PaymentCreateResponse:
     result = await payment_service.create_payment(payload=payload, idempotency_key=idempotency_key)
-
-    if not result.created:
-        response.status_code = status.HTTP_200_OK
 
     return PaymentCreateResponse(
         payment_id=result.payment.id,

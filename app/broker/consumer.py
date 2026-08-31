@@ -45,6 +45,14 @@ async def create_webhook_session() -> None:
     logger.info("Shared webhook HTTP session created")
 
 
+@application.after_startup
+async def declare_dlq_binding() -> None:
+    exchange = await broker.declare_exchange(domain_exchange)
+    queue = await broker.declare_queue(error_queue)
+    await queue.bind(exchange, routing_key=RabbitSettings.dlq_routing_key, robust=error_queue.robust)
+    logger.info("DLQ queue bound to exchange with routing key %s", RabbitSettings.dlq_routing_key)
+
+
 @application.on_shutdown
 async def close_webhook_session() -> None:
     if _webhook_session is not None:
@@ -99,10 +107,7 @@ async def _process_payment(session: AsyncSession, payment: Payment) -> PaymentSt
     if random.random() < 0.1:
         raise RuntimeError("Simulation error processing payment!")
 
-    if random.random() < 0.9:
-        payment.status = PaymentStatus.SUCCEEDED
-    else:
-        payment.status = PaymentStatus.FAILED
+    payment.status = PaymentStatus.SUCCEEDED
 
     payment.processed_at = datetime.now(UTC)
     await session.commit()

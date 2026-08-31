@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.api import main_router
 from app.broker.publisher import OutboxPublisher
 from app.broker.rabbit import (
+    RabbitSettings,
     create_rabbit_broker,
     created_queue,
     domain_exchange,
@@ -25,9 +26,10 @@ PUBLISHER_SHUTDOWN_TIMEOUT_SECONDS = 10.0
 async def lifespan(_: FastAPI):
     broker = create_rabbit_broker(settings.rabbitmq_url)
     await broker.connect()
-    await broker.declare_exchange(domain_exchange)
+    exchange = await broker.declare_exchange(domain_exchange)
     await broker.declare_queue(created_queue)
-    await broker.declare_queue(error_queue)
+    dlq = await broker.declare_queue(error_queue)
+    await dlq.bind(exchange, routing_key=RabbitSettings.dlq_routing_key, robust=error_queue.robust)
 
     publisher = OutboxPublisher(broker=broker, poll_interval_seconds=settings.outbox_poll_interval_seconds)
     publisher_task = asyncio.create_task(publisher.run())

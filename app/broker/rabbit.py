@@ -4,7 +4,7 @@ from faststream.rabbit.schemas import ExchangeType
 
 class RabbitSettings:
     exchange_name = "payments.domain"
-    main_queue = "payments.created"
+    main_queue = "payments.new"
     dlq_queue = "payments.errors"
     routing_key = "event.payment_created"
     dlq_routing_key = "event.payment_rejected"
